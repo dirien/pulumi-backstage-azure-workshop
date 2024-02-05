@@ -1,0 +1,3 @@
+config:
+  backstage-azure-infrastructure-yaml:azureDevOpsToken:
+    secure: AAABAJfEsoJeqCfgIW+zBi6xlILrGilTmVDkjdpYXDUOTy1j1XZP/3Cwb80eaqgigCZKvm3DkYE8sSEPRWdOdzzjbEwGVV9Z6aJzgY4rwxfZJyaZ

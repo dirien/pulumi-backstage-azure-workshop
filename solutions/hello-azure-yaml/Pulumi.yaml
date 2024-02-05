@@ -1,0 +1,58 @@
+name: hello-azure-yaml
+runtime: yaml
+description: A minimal Azure Native Pulumi YAML program
+
+resources: # Create an Azure Resource Group
+  resourceGroup:
+    type: azure-native:resources:ResourceGroup
+  virtualNetwork:
+    type: azure-native:network:VirtualNetwork
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      addressSpace:
+        addressPrefixes:
+        - "10.0.0.0/16"
+
+    # Create an Azure Subnet
+  subnet:
+    type: azure-native:network:Subnet
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      virtualNetworkName: ${virtualNetwork.name}
+      addressPrefix: "10.0.1.0/24"
+
+  # Create an Azure Network Interface
+  networkInterface:
+    type: azure-native:network:NetworkInterface
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      ipConfigurations:
+      - name: test-ip-config
+        primary: true
+        subnet:
+          id: ${subnet.id}
+
+  virtualMachine:
+    type: azure-native:compute:VirtualMachine
+    properties:
+      networkProfile:
+        networkInterfaces:
+        - id: ${networkInterface.id}
+      hardwareProfile:
+        vmSize: Standard_B2s
+      osProfile:
+        computerName: HelloVM
+        adminUsername: azureuser
+        adminPassword: "Password1234!"
+      resourceGroupName: ${resourceGroup.name}
+      storageProfile:
+        imageReference:
+          offer: 0001-com-ubuntu-server-lunar
+          publisher: Canonical
+          sku: 23_04-gen2
+          version: latest
+      vmName: HelloVM
+
+outputs:
+  vmName: ${virtualMachine.name}
+
