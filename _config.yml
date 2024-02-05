@@ -1,0 +1,23 @@
+title: "Hands-on with Backstage on Azure: From App Service to Azure DevOps"
+author: Engin Diri
+
+markdown: kramdown
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+- jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: true
+include:
+- 00-hello-backstage-world.md
+- 01-pulumi-and-azure.md
+- 02-containerize-backstage.md
+- 03-define-the-backstage-infrastructure.md
+- 04-housekeeping.md
+- README.md
+- img/*

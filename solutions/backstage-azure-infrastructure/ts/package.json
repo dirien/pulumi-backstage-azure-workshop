@@ -1,0 +1,13 @@
+{
+	"name": "backstage-azure-infrastructure-yaml",
+	"devDependencies": {
+		"@types/node": "^14"
+	},
+	"dependencies": {
+		"typescript": "^4.0.0",
+		"@pulumi/pulumi": "^3.0.0",
+		"@pulumi/azuread": "5.46.0",
+		"@pulumi/docker": "4.4.3",
+		"@pulumi/azure-native": "2.28.0"
+	}
+}

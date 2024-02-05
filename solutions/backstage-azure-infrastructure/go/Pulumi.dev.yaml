@@ -1,0 +1,4 @@
+config:
+  azure-native:location: WestEurope
+  backstage-azure-infrastructure-yaml:azureDevOpsToken:
+    secure: AAABAIMroKFob2VYjLi4nXbLOSp5llFqOCI7bdTpNAl7P1oBxGfG26wDzH1777erEFMScYOGv5ZJiVNgSTyPqtJv3TDrIgVZnea3SbFlAE767Cfd

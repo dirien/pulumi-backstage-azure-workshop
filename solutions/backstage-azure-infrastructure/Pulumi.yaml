@@ -1,0 +1,224 @@
+name: backstage-azure-infrastructure-yaml
+runtime: yaml
+description: A minimal Azure Native Pulumi YAML program
+
+config:
+  azureDevOpsToken:
+    type: string
+  azureDevOpsOrganization:
+    type: string
+    default: "dirien"
+
+variables:
+  roleDefinitionIds:
+  - b24988ac-6180-42a0-ab88-20f7382dd24c
+  - acdd72a7-3385-48ef-bd42-f606fba81ae7
+  - 7f951dda-4ed3-4680-a7ca-43fe172d538d
+
+  contributorRoleDefinition:
+    fn::invoke:
+      function: azure-native:authorization:getRoleDefinition
+      arguments:
+        roleDefinitionId: ${roleDefinitionIds[0]}
+        scope: ${backstageContainerRegistry.id}
+
+  readerRoleDefinition:
+    fn::invoke:
+      function: azure-native:authorization:getRoleDefinition
+      arguments:
+        roleDefinitionId: ${roleDefinitionIds[1]}
+        scope: ${backstageContainerRegistry.id}
+
+  acrPullRoleDefinition:
+    fn::invoke:
+      function: azure-native:authorization:getRoleDefinition
+      arguments:
+        roleDefinitionId: ${roleDefinitionIds[2]}
+        scope: ${backstageContainerRegistry.id}
+
+resources:
+  resourceGroup:
+    type: azure-native:resources:ResourceGroup
+
+  backstageAzureApplication:
+    type: azuread:Application
+    properties:
+      displayName: "backstage"
+
+  backstageAzureServicePrincipal:
+    type: azuread:ServicePrincipal
+    properties:
+      applicationId: ${backstageAzureApplication.applicationId}
+      tags: ["backstage"]
+
+  backstageAzureApplicationPassword:
+    type: azuread:ApplicationPassword
+    properties:
+      applicationObjectId: ${backstageAzureApplication.objectId}
+      endDate: "2099-01-01T00:00:00Z"
+
+
+  backstageContainerRegistry:
+    type: azure-native:containerregistry:Registry
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      registryName: pulumibackstage
+      sku:
+        name: Basic
+      identity:
+        type: SystemAssigned
+      adminUserEnabled: false
+
+  roleAssignment0:
+    type: azure-native:authorization:RoleAssignment
+    properties:
+      principalId: ${backstageAzureServicePrincipal.objectId}
+      roleDefinitionId: ${contributorRoleDefinition.id}
+      scope: ${backstageContainerRegistry.id}
+      principalType: ServicePrincipal
+
+  roleAssignment1:
+    type: azure-native:authorization:RoleAssignment
+    properties:
+      principalId: ${backstageAzureServicePrincipal.objectId}
+      roleDefinitionId: ${readerRoleDefinition.id}
+      scope: ${backstageContainerRegistry.id}
+      principalType: ServicePrincipal
+
+  roleAssignment2:
+    type: azure-native:authorization:RoleAssignment
+    properties:
+      principalId: ${backstageAzureServicePrincipal.objectId}
+      roleDefinitionId: ${acrPullRoleDefinition.id}
+      scope: ${backstageContainerRegistry.id}
+      principalType: ServicePrincipal
+
+  backstageImage:
+    type: docker:Image
+    properties:
+      build:
+        context: "../backstage"
+        platform: "linux/amd64"
+        builderVersion: BuilderBuildKit
+        dockerfile: "../backstage/packages/backend/Dockerfile"
+      imageName: ${backstageContainerRegistry.loginServer}/backstage
+      registry:
+        server: ${backstageContainerRegistry.loginServer}
+        username: ${backstageAzureServicePrincipal.applicationId}
+        password: ${backstageAzureApplicationPassword.value}
+
+  backstageOperationalInsightsWorkspace:
+    type: azure-native:operationalinsights:Workspace
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      retentionInDays: 30
+      sku:
+        name: PerGB2018
+
+  backstageAppInsights:
+    type: azure-native:insights:Component
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      applicationType: other
+      kind: other
+      workspaceResourceId: ${backstageOperationalInsightsWorkspace.id}
+
+  backstagePostgresqlServer:
+    type: azure-native:dbforpostgresql/v20230301preview:Server
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      sku:
+        name: "Standard_D2ds_v4"
+        tier: "GeneralPurpose"
+      storage:
+        storageSizeGB: 32
+      backup:
+        geoRedundantBackup: "Disabled"
+      version: "16"
+      administratorLogin: "backstage"
+      administratorLoginPassword: "1Backstage1!"
+      serverName: "backstage-postgresql-${pulumi.project}"
+
+  backstagePostgresqlFirewallRule:
+    type: azure-native:dbforpostgresql:FirewallRule
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      serverName: ${backstagePostgresqlServer.name}
+      startIpAddress: "0.0.0.0"
+      endIpAddress: "255.255.255.255"
+
+  backstagePostgresqlDatabase:
+    type: azure-native:dbforpostgresql:Database
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      serverName: ${backstagePostgresqlServer.name}
+      collation: "en_US.utf8"
+      charset: "UTF8"
+
+  backstageAppServicePlan:
+    type: azure-native:web:AppServicePlan
+    properties:
+      resourceGroupName: ${resourceGroup.name}
+      kind: "Linux"
+      sku:
+        name: "S1"
+        tier: "Standard"
+      reserved: true
+      isSpot: false
+
+  backstageWebApp:
+    type: azure-native:web:WebApp
+    properties:
+      name: "my-backstage-app"
+      resourceGroupName: ${resourceGroup.name}
+      serverFarmId: ${backstageAppServicePlan.id}
+      kind: "app,linux,container"
+      identity:
+        type: SystemAssigned
+      siteConfig:
+        cors:
+          supportCredentials: true
+          allowedOrigins:
+          - "https://my-backstage-app.azurewebsites.net"
+        httpLoggingEnabled: true
+        appSettings:
+        - name: POSTGRES_HOST
+          value: ${backstagePostgresqlServer.fullyQualifiedDomainName}
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_USER
+          value: ${backstagePostgresqlServer.administratorLogin}
+        - name: POSTGRES_PASSWORD
+          value: "1Backstage1!"
+        - name: AZURE_PAT
+          value: ${azureDevOpsToken}
+        - name: AZURE_ORG
+          value: ${azureDevOpsOrganization}
+        - name: APPINSIGHTS_INSTRUMENTATIONKEY
+          value: ${backstageAppInsights.instrumentationKey}
+        - name: DOCKER_ENABLE_CI
+          value: "true"
+        - name: WEBSITES_PORT
+          value: "7007"
+        - name: PORT
+          value: "8080"
+        - name: BACKSTAGE_BASE_URL
+          value: "https://my-backstage-app.azurewebsites.net"
+        - name: APP_CONFIG_backend_database_connection_ssl_required
+          value: "true"
+        - name: APP_CONFIG_backend_database_connection_ssl_rejectUnauthorized
+          value: "true"
+        acrUseManagedIdentityCreds: true
+        linuxFxVersion: "DOCKER|${backstageImage.repoDigest}"
+
+  roleAssignment3:
+    type: azure-native:authorization:RoleAssignment
+    properties:
+      principalId: ${backstageWebApp.identity.principalId}
+      roleDefinitionId: ${acrPullRoleDefinition.id}
+      scope: ${backstageContainerRegistry.id}
+      principalType: ServicePrincipal
+
+outputs:
+  backstage-webapp-url: ${backstageWebApp.defaultHostName}
+  repo-digest: ${backstageImage.repoDigest}

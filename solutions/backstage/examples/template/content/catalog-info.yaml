@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name | dump }}
+  annotations:
+    dev.azure.com/project-repo: ${{values.destination.owner + "/" + values.destination.repo}}
+spec:
+  type: service
+  owner: user:guest
+  lifecycle: experimental

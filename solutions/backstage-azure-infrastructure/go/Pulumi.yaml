@@ -1,0 +1,9 @@
+name: backstage-azure-infrastructure-yaml
+runtime: go
+description: A minimal Azure Native Pulumi YAML program
+config:
+  azureDevOpsOrganization:
+    type: string
+    default: dirien
+  azureDevOpsToken:
+    type: string
